@@ -81,8 +81,8 @@ class FSM(ABC):
 
     def __init__(self) -> None:
         super().__init__()
-        self.__state: State = self.init
-        self.__to_thread: Queue[EventMsg] = Queue()
+        self._state: State = self.init
+        self._to_thread: Queue[EventMsg] = Queue()
         self.ctx = Context()
 
     @abstractmethod
@@ -94,21 +94,30 @@ class FSM(ABC):
         exit(0)
 
     def to(self, state: State):
-        self.__state = state
-
+        self._state = state
+    
+    def call_sub(self, subfsm_cls: Callable[...,"FSM"], state: State):
+        sub = subfsm_cls()
+        sub._to_thread = self._to_thread
+        sub.run().join()
+        self.to(state)
+    
     def run(self):
         def _main():
-            while self.__state != self.halt:
-                self.__state()
+            while self._state != self.halt:
+                self._state()
             else:
                 self.halt()
 
-        threading.Thread(target=_main, daemon=True).start()
+        td = threading.Thread(target=_main, daemon=True)
+        td.start()
+        return td
+
 
     def wait(self, event: Event, *, enable_quick_unpack: bool = True) -> Any:
-        msg = self.__to_thread.get()
+        msg = self._to_thread.get()
         while msg.event != event:
-            msg = self.__to_thread.get()
+            msg = self._to_thread.get()
         if enable_quick_unpack:  # quick unpack
             values = tuple(msg.kwargs.values())
             if len(values) == 1:
@@ -118,4 +127,4 @@ class FSM(ABC):
         return msg.kwargs
 
     def send(self, event: Event, **kwargs: Any):
-        self.__to_thread.put(EventMsg(event, kwargs))
+        self._to_thread.put(EventMsg(event, kwargs))
