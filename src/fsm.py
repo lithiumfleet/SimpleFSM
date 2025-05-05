@@ -91,7 +91,7 @@ class FSM(ABC):
 
     @abstractmethod
     def halt(self):
-        exit(0)
+        return
 
     def to(self, state: State):
         self._state = state

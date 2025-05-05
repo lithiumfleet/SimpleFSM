@@ -13,7 +13,7 @@ class NewGame(FSM):
         return
     
     def new_game(self):
-        self.rand_num = random.randint(1, 1)
+        self.rand_num = random.randint(1, 25)
         print("game start!")
         self.to(self.guess)
 
@@ -61,8 +61,8 @@ class UI(FSM):
 
 def main():
     ui = UI()
-    ui.run()
-    while True:
+    t = ui.run()
+    while t.is_alive():
         cmd = input()
         if cmd == "":
             ui.send("enter")
