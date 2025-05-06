@@ -3,19 +3,20 @@ from dataclasses import dataclass
 from queue import Queue
 import threading
 from typing import Any, Callable, Dict
+from contextlib import contextmanager
 
 
 class Context:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key)-> Any:
         return self.__dict__.get(key)
 
     def __setitem__(self, key, value):
         self.__dict__[key] = value
 
-    def __getattr__(self, name):
+    def __getattr__(self, name)-> Any:
         try:
             return self.__dict__[name]
         except KeyError:
@@ -45,25 +46,28 @@ class Context:
     def __repr__(self):
         return f"Context({self.__dict__})"
 
-    def get(self, key, default=None):
+    def get(self, key, default=None) -> Any:
         return self.__dict__.get(key, default)
 
-    def items(self):
+    def items(self)-> Any:
         return self.__dict__.items()
 
-    def keys(self):
+    def keys(self)-> Any:
         return self.__dict__.keys()
 
-    def values(self):
+    def values(self)-> Any:
         return self.__dict__.values()
 
-    def update(self, other=None, **kwargs):
+    def update(self, other=None, **kwargs)-> Any:
         if other is not None:
             self.__dict__.update(other)
         self.__dict__.update(kwargs)
 
-    def to_dict(self):
+    def to_dict(self)-> Any:
         return self.__dict__.copy()
+    
+    def copy(self) -> "Context":
+        return Context(**self.to_dict())
 
 
 type State = Callable
@@ -95,13 +99,14 @@ class FSM(ABC):
 
     def to(self, state: State):
         self._state = state
-    
-    def call_sub(self, subfsm_cls: Callable[...,"FSM"], state: State):
+
+    def call_sub(self, subfsm_cls: Callable[..., "FSM"], state: State):
         sub = subfsm_cls()
+        sub.ctx = self.ctx
         sub._to_thread = self._to_thread
         sub.run().join()
         self.to(state)
-    
+
     def run(self):
         def _main():
             while self._state != self.halt:
@@ -112,7 +117,6 @@ class FSM(ABC):
         td = threading.Thread(target=_main, daemon=True)
         td.start()
         return td
-
 
     def wait(self, event: Event, *, enable_quick_unpack: bool = True) -> Any:
         msg = self._to_thread.get()
@@ -128,3 +132,10 @@ class FSM(ABC):
 
     def send(self, event: Event, **kwargs: Any):
         self._to_thread.put(EventMsg(event, kwargs))
+
+    @contextmanager
+    def listen(self, *event: Event):
+        msg = self._to_thread.get()
+        while msg.event not in event:
+            msg = self._to_thread.get()
+        yield msg
